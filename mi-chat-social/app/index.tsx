@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Button, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import LottieView from 'lottie-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -9,6 +9,7 @@ const COLORS = ['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00'];
 export default function AvatarScreen() {
   const router = useRouter();
 
+  const [name, setName] = useState('');
   const [gender, setGender] = useState<'men' | 'woman'>('men');
   const [hairColor, setHairColor] = useState('#000000');
   const [shirtColor, setShirtColor] = useState('#0000FF');
@@ -16,23 +17,42 @@ export default function AvatarScreen() {
   useEffect(() => {
     AsyncStorage.getItem('avatar').then((data) => {
       if (data) {
-        const { gender, hairColor, shirtColor } = JSON.parse(data);
+        const { gender, hairColor, shirtColor, name } = JSON.parse(data);
         if (gender === 'men' || gender === 'woman') setGender(gender);
         if (hairColor) setHairColor(hairColor);
         if (shirtColor) setShirtColor(shirtColor);
+        if (name) setName(name);
       }
     });
   }, []);
 
   const handleContinue = async () => {
-    const avatar = { gender, hairColor, shirtColor };
-    await AsyncStorage.setItem('avatar', JSON.stringify(avatar));
-    Alert.alert('Avatar guardado', '¡Tu avatar fue personalizado con éxito!');
-    router.push('/chat');
+    if (!name.trim()) {
+      Alert.alert('Error', 'Por favor, escribí tu nombre antes de continuar');
+      return;
+    }
+    const avatar = { gender, hairColor, shirtColor, name: name.trim() };
+    try {
+      await AsyncStorage.setItem('avatar', JSON.stringify(avatar));
+      await AsyncStorage.setItem('userName', name.trim());  // Guardar nombre aparte
+      Alert.alert('Avatar guardado', '¡Tu avatar fue personalizado con éxito!');
+      router.push('/chat');
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo guardar el avatar');
+      console.error(error);
+    }
   };
 
   return (
     <View style={styles.container}>
+      <Text style={styles.title}>¿Cuál es tu nombre?</Text>
+      <TextInput
+        style={styles.input}
+        value={name}
+        onChangeText={setName}
+        placeholder="Escribí tu nombre"
+      />
+
       <Text style={styles.title}>Elegí tu género</Text>
       <View style={styles.genderContainer}>
         <TouchableOpacity
@@ -114,5 +134,14 @@ const styles = StyleSheet.create({
   },
   colorSelected: {
     borderColor: '#000',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    width: '80%',
+    marginTop: 10,
   },
 });

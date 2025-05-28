@@ -22,6 +22,9 @@ wss.on('connection', (ws, req) => {
           break;
 
         case 'chat_message':
+          broadcast(message, ws);
+          break;
+
         case 'reaction':
           broadcast(message, ws);
           break;

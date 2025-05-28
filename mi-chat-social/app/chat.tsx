@@ -1,105 +1,131 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Animated } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+} from 'react-native';
 import LottieView from 'lottie-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ChatScreen() {
-  const [messages, setMessages] = useState<string[]>([]);
+  const [messages, setMessages] = useState<{ text: string; sender: string }[]>([]);
   const [input, setInput] = useState('');
+  const [name, setName] = useState('');
   const [gender, setGender] = useState<'men' | 'woman'>('men');
   const [hairColor, setHairColor] = useState('#000000');
   const [shirtColor, setShirtColor] = useState('#0000FF');
+  const [ws, setWs] = useState<WebSocket | null>(null);
 
   const avatarRef = useRef<LottieView>(null);
   const heartRef = useRef<LottieView>(null);
   const laughRef = useRef<LottieView>(null);
+  const scrollRef = useRef<ScrollView>(null);
 
-  const heartOpacity = useRef(new Animated.Value(0)).current;
-  const laughOpacity = useRef(new Animated.Value(0)).current;
+  const [showHeart, setShowHeart] = useState(false);
+  const [showLaugh, setShowLaugh] = useState(false);
+
+  // Para controlar que no se superpongan animaciones
+  const reactionTimeout = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const loadAvatar = async () => {
-      const json = await AsyncStorage.getItem('avatar');
-      if (json) {
-        const avatar = JSON.parse(json);
-        if (avatar.gender === 'men' || avatar.gender === 'woman') setGender(avatar.gender);
-        if (avatar.hairColor) setHairColor(avatar.hairColor);
-        if (avatar.shirtColor) setShirtColor(avatar.shirtColor);
+    const loadData = async () => {
+      try {
+        const avatarJson = await AsyncStorage.getItem('avatar');
+        const storedName = await AsyncStorage.getItem('userName');
+
+        if (avatarJson) {
+          const avatar = JSON.parse(avatarJson);
+          if (avatar.gender === 'men' || avatar.gender === 'woman') setGender(avatar.gender);
+          if (avatar.hairColor) setHairColor(avatar.hairColor);
+          if (avatar.shirtColor) setShirtColor(avatar.shirtColor);
+        }
+
+        if (storedName) setName(storedName);
+      } catch (e) {
+        console.error('Error cargando datos del chat', e);
       }
     };
-    loadAvatar();
+    loadData();
   }, []);
 
-  const animateReaction = (ref: React.RefObject<LottieView>, opacity: Animated.Value) => {
-    ref.current?.play();
-    Animated.sequence([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 1000,
-        delay: 1000,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
+  useEffect(() => {
+    if (!name) return; // No conectar sin nombre
+
+    const socket = new WebSocket('ws://192.168.0.109:8080'); // Cambiar IP/host según corresponda
+    setWs(socket);
+
+    socket.onopen = () => {
+      console.log('Conectado a WebSocket');
+      socket.send(JSON.stringify({ type: 'user_connected', userId: name }));
+    };
+
+    socket.onmessage = event => {
+      const msg = JSON.parse(event.data);
+      if (msg.text && msg.sender) {
+        setMessages(prev => {
+          const updated = [...prev, msg];
+          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+          return updated;
+        });
+        detectEmotions(msg.text);
+      }
+    };
+
+    socket.onerror = e => console.error('WebSocket error', e);
+    socket.onclose = () => console.log('WebSocket cerrado');
+
+    return () => socket.close();
+  }, [name]);
 
   const playReaction = (type: 'heart' | 'laugh') => {
+    if (reactionTimeout.current) clearTimeout(reactionTimeout.current);
+
     if (type === 'heart') {
-      animateReaction(heartRef, heartOpacity);
+      setShowHeart(true);
+      setShowLaugh(false);
     } else {
-      animateReaction(laughRef, laughOpacity);
+      setShowLaugh(true);
+      setShowHeart(false);
     }
+
+    reactionTimeout.current = setTimeout(() => {
+      setShowHeart(false);
+      setShowLaugh(false);
+    }, 2000);
   };
 
   const detectEmotions = (text: string) => {
     const normalized = text.toLowerCase();
-    if (normalized.includes('❤️') || normalized.includes('love')) {
+    if (/❤️|love/.test(normalized)) {
       playReaction('heart');
-    } else if (
-      normalized.includes('😂') ||
-      normalized.includes('jaja') ||
-      normalized.includes('xd') ||
-      normalized.includes('lol')
-    ) {
+    } else if (/😂|jaja|xd|lol/.test(normalized)) {
       playReaction('laugh');
     }
   };
 
   const sendMessage = () => {
     const trimmed = input.trim();
-    if (trimmed) {
-      setMessages([...messages, trimmed]);
+    if (trimmed && name && ws?.readyState === WebSocket.OPEN) {
+      const newMessage = { type: 'chat_message', text: trimmed, sender: name };
+      ws.send(JSON.stringify(newMessage));
+      setMessages(prev => [...prev, newMessage]);
       avatarRef.current?.play();
       detectEmotions(trimmed);
       setInput('');
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
     }
   };
 
   return (
-    <View style={styles.container}>
-      {/* Reacciones pantalla completa */}
-      <Animated.View style={[styles.reaction, { opacity: heartOpacity }]}>
-        <LottieView
-          ref={heartRef}
-          source={require('../assets/animations/heart.json')}
-          loop={false}
-          style={styles.fullscreenLottie}
-        />
-      </Animated.View>
-      <Animated.View style={[styles.reaction, { opacity: laughOpacity }]}>
-        <LottieView
-          ref={laughRef}
-          source={require('../assets/animations/laugh.json')}
-          loop={false}
-          style={styles.fullscreenLottie}
-        />
-      </Animated.View>
-
-      {/* Avatar */}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <View style={styles.avatarContainer}>
         <LottieView
           ref={avatarRef}
@@ -118,48 +144,79 @@ export default function ChatScreen() {
         />
       </View>
 
-      {/* Mensajes */}
-      <View style={styles.messages}>
-        {messages.map((msg, i) => (
-          <Text key={i} style={styles.message}>{msg}</Text>
-        ))}
-      </View>
+      <ScrollView style={styles.messages} ref={scrollRef}>
+        {messages.map((msg, i) => {
+          const isMine = msg.sender === name;
+          return (
+            <View
+              key={i}
+              style={[
+                styles.bubble,
+                {
+                  alignSelf: isMine ? 'flex-end' : 'flex-start',
+                  backgroundColor: isMine ? '#daf8cb' : '#e0e0e0',
+                },
+              ]}
+            >
+              <Text style={styles.sender}>{isMine ? 'Tú' : msg.sender}</Text>
+              <Text style={styles.message}>{msg.text}</Text>
+            </View>
+          );
+        })}
+      </ScrollView>
 
-      {/* Input */}
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
           placeholder="Escribí un mensaje..."
           value={input}
           onChangeText={setInput}
+          onSubmitEditing={sendMessage}
+          returnKeyType="send"
         />
         <TouchableOpacity onPress={sendMessage} style={styles.sendButton}>
           <Text style={{ color: '#fff' }}>Enviar</Text>
         </TouchableOpacity>
       </View>
-    </View>
+
+      {showHeart && (
+        <View style={styles.fullscreenAnimation}>
+          <LottieView
+            ref={heartRef}
+            source={require('../assets/animations/heart.json')}
+            loop={false}
+            autoPlay
+            style={{ width: 300, height: 300 }}
+          />
+        </View>
+      )}
+      {showLaugh && (
+        <View style={styles.fullscreenAnimation}>
+          <LottieView
+            ref={laughRef}
+            source={require('../assets/animations/laugh.json')}
+            loop={false}
+            autoPlay
+            style={{ width: 300, height: 300 }}
+          />
+        </View>
+      )}
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#fff' },
   avatarContainer: { alignItems: 'center', marginBottom: 10 },
-  reaction: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    zIndex: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fullscreenLottie: {
-    width: 250,
-    height: 250,
-  },
   messages: { flex: 1, marginVertical: 10 },
-  message: { fontSize: 16, paddingVertical: 4 },
+  bubble: {
+    padding: 10,
+    marginVertical: 4,
+    borderRadius: 10,
+    maxWidth: '80%',
+  },
+  sender: { fontWeight: 'bold', marginBottom: 2, color: '#333' },
+  message: { fontSize: 16 },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -180,5 +237,13 @@ const styles = StyleSheet.create({
     padding: 10,
     marginLeft: 10,
     borderRadius: 10,
+  },
+  fullscreenAnimation: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0)',
+    zIndex: 999,
   },
 });
