@@ -1,53 +1,33 @@
 const WebSocket = require('ws');
+const { v4: uuidv4 } = require('uuid'); // vamos a usar uuid para ids
 
-const wss = new WebSocket.Server({ port: 8080, host: '0.0.0.0' }, () => {
-  console.log('Servidor WebSocket iniciado en ws://0.0.0.0:8080');
-});
+const wss = new WebSocket.Server({ port: 8080 });
+console.log('Servidor WebSocket corriendo en ws://192.168.0.109:8080');
 
-const clients = new Map(); // ws -> userId
+wss.on('connection', (ws) => {
+  console.log('Nuevo cliente conectado');
 
-wss.on('connection', (ws, req) => {
-  const clientIP = req.socket.remoteAddress;
-  console.log(`Cliente conectado desde ${clientIP}`);
-
-  ws.on('message', (data) => {
+  ws.on('message', (message) => {
     try {
-      const message = JSON.parse(data);
-      console.log('Mensaje recibido:', message);
+      const data = JSON.parse(message);
 
-      switch (message.type) {
-        case 'user_connected':
-          clients.set(ws, message.userId);
-          console.log(`Usuario conectado: ${message.userId} desde ${clientIP}`);
-          break;
-
-        case 'chat_message':
-          broadcast(message, ws);
-          break;
-
-        case 'reaction':
-          broadcast(message, ws);
-          break;
-
-        default:
-          console.warn('Tipo de mensaje desconocido:', message.type);
+      // Validamos que venga con id, sender y text
+      if (data.type === 'chat_message' && data.id && data.sender && data.text) {
+        // Reenviamos a todos clientes el mismo mensaje, con id y todo
+        wss.clients.forEach((client) => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(data));
+          }
+        });
+      } else {
+        console.log('Mensaje recibido sin formato válido:', data);
       }
     } catch (err) {
-      console.error('Error procesando mensaje:', err);
+      console.error('Mensaje inválido:', err.message);
     }
   });
 
   ws.on('close', () => {
-    const userId = clients.get(ws) || 'Desconocido';
-    console.log(`Cliente desconectado: ${userId} (${clientIP})`);
-    clients.delete(ws);
+    console.log('Cliente desconectado');
   });
 });
-
-function broadcast(message, senderWs) {
-  for (const client of wss.clients) {
-    if (client !== senderWs && client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(message));
-    }
-  }
-}

@@ -8,7 +8,6 @@ const COLORS = ['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00'];
 
 export default function AvatarScreen() {
   const router = useRouter();
-
   const [name, setName] = useState('');
   const [gender, setGender] = useState<'men' | 'woman'>('men');
   const [hairColor, setHairColor] = useState('#000000');
@@ -34,8 +33,7 @@ export default function AvatarScreen() {
     const avatar = { gender, hairColor, shirtColor, name: name.trim() };
     try {
       await AsyncStorage.setItem('avatar', JSON.stringify(avatar));
-      await AsyncStorage.setItem('userName', name.trim());  // Guardar nombre aparte
-      Alert.alert('Avatar guardado', '¡Tu avatar fue personalizado con éxito!');
+      await AsyncStorage.setItem('userName', name.trim());
       router.push('/chat');
     } catch (error) {
       Alert.alert('Error', 'No se pudo guardar el avatar');
@@ -122,7 +120,7 @@ const styles = StyleSheet.create({
   genderSelected: {
     backgroundColor: '#666',
   },
-  genderText: { color: '#fff', fontWeight: 'bold' },
+  genderText: { color: '#000', fontWeight: 'bold' },
   colorContainer: { flexDirection: 'row', marginTop: 10 },
   colorCircle: {
     width: 40,
@@ -133,7 +131,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   colorSelected: {
-    borderColor: '#000',
+    borderColor: '#666',
   },
   input: {
     borderWidth: 1,

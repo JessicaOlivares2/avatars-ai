@@ -29,8 +29,8 @@ export default function ChatScreen() {
   const [showHeart, setShowHeart] = useState(false);
   const [showLaugh, setShowLaugh] = useState(false);
 
-  // Para controlar que no se superpongan animaciones
-  const reactionTimeout = useRef<NodeJS.Timeout | null>(null);
+  // Cambié acá para que no tire error de tipos
+  const reactionTimeout = useRef<NodeJS.Timeout | number | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -54,9 +54,9 @@ export default function ChatScreen() {
   }, []);
 
   useEffect(() => {
-    if (!name) return; // No conectar sin nombre
+    if (!name) return;
 
-    const socket = new WebSocket('ws://192.168.0.109:8080'); // Cambiar IP/host según corresponda
+    const socket = new WebSocket('ws://192.168.0.109:8080'); // Ajustar IP o dominio real
     setWs(socket);
 
     socket.onopen = () => {
@@ -65,14 +65,19 @@ export default function ChatScreen() {
     };
 
     socket.onmessage = event => {
-      const msg = JSON.parse(event.data);
-      if (msg.text && msg.sender) {
-        setMessages(prev => {
-          const updated = [...prev, msg];
-          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
-          return updated;
-        });
-        detectEmotions(msg.text);
+      try {
+        const msg = JSON.parse(event.data);
+
+        if (msg.text && msg.sender) {
+          setMessages(prev => {
+            const updated = [...prev, msg];
+            setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+            return updated;
+          });
+          detectEmotions(msg.text);
+        }
+      } catch (e) {
+        console.error('Mensaje no es JSON válido:', event.data);
       }
     };
 
@@ -83,7 +88,7 @@ export default function ChatScreen() {
   }, [name]);
 
   const playReaction = (type: 'heart' | 'laugh') => {
-    if (reactionTimeout.current) clearTimeout(reactionTimeout.current);
+    if (reactionTimeout.current) clearTimeout(reactionTimeout.current as number);
 
     if (type === 'heart') {
       setShowHeart(true);
@@ -126,6 +131,7 @@ export default function ChatScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <Text style={styles.welcomeText}>Bienvenidx al chat {name}</Text>
       <View style={styles.avatarContainer}>
         <LottieView
           ref={avatarRef}
@@ -143,6 +149,8 @@ export default function ChatScreen() {
           ]}
         />
       </View>
+
+      
 
       <ScrollView style={styles.messages} ref={scrollRef}>
         {messages.map((msg, i) => {
@@ -208,6 +216,7 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#fff' },
   avatarContainer: { alignItems: 'center', marginBottom: 10 },
+  welcomeText: { fontSize: 20, fontWeight: '600', textAlign: 'center', marginBottom: 10 },
   messages: { flex: 1, marginVertical: 10 },
   bubble: {
     padding: 10,
