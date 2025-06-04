@@ -1,8 +1,8 @@
 const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 
-const wss = new WebSocket.Server({ port: 8080 });
-console.log('Servidor WebSocket corriendo en ws://192.168.0.109:8080');
+const wss = new WebSocket.Server({ port: 8080, host: '0.0.0.0' });
+console.log('Servidor WebSocket corriendo en 0.0.0.0:8080');
 
 wss.on('connection', (ws) => {
   console.log('Nuevo cliente conectado');
@@ -16,7 +16,6 @@ wss.on('connection', (ws) => {
           if (data.sender && data.text) {
             const messageWithId = { ...data, id: uuidv4() };
 
-            // Enviar a todos menos al emisor
             wss.clients.forEach((client) => {
               if (client !== ws && client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify(messageWithId));
@@ -30,8 +29,6 @@ wss.on('connection', (ws) => {
         case 'user_connected':
           if (data.userId) {
             console.log(`Usuario conectado: ${data.userId}`);
-
-            // Reenviar a todos (incluido emisor)
             wss.clients.forEach((client) => {
               if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify(data));

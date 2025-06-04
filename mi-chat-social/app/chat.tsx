@@ -56,7 +56,7 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!name) return;
 
-    const socket = new WebSocket('ws://192.168.0.109:8080'); // Ajustar IP o dominio real
+    const socket = new WebSocket('ws://192.168.0.106:8080'); // Ajustar IP o dominio real
     setWs(socket);
 
     socket.onopen = () => {
